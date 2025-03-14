@@ -2,7 +2,7 @@ import { fabric } from "fabric";
 import imgUrl from "./assets/images/profile_img.png";
 
 const fontSize = 18;
-const minimumDistanceBetweenNodes = 150;
+const minimumDistanceBetweenNodes = 200; // Tăng lên từ 150 để các node cách xa nhau hơn
 const verticalDistanceBetweenNodes = 200;
 const nodeRadius = 64;
 
@@ -12,6 +12,7 @@ export interface Relation {
   children: Node[];
   _relation?: fabric.Line;
   _parentLine?: fabric.Line;
+  isPrimaryRelationship?: boolean; // Thêm thuộc tính để đánh dấu đây là mối quan hệ chính hay phụ
 }
 
 export interface Node {
@@ -273,7 +274,8 @@ export default class FamilyTree {
   private _drawPartnerLine = (
     node1: fabric.Group,
     node2: fabric.Group,
-    isMarried: boolean
+    isMarried: boolean,
+    isPrimaryRelationship: boolean = true
   ) => {
     const node1Center = node1.getCenterPoint();
     const node2Center = node2.getCenterPoint();
@@ -286,7 +288,7 @@ export default class FamilyTree {
       ],
       {
         ...lineStyles,
-        strokeDashArray: isMarried ? [] : [5, 5],
+        strokeDashArray: isMarried && isPrimaryRelationship ? [] : [5, 5],
       }
     );
     return line;
@@ -294,12 +296,12 @@ export default class FamilyTree {
 
   private _drawParentLine = (
     parent: fabric.Line | Node,
-    isFirst: boolean | undefined
+    isPrimaryRelationship: boolean = true
   ) => {
     let parentLineOrigin: fabric.Point;
     if (parent instanceof fabric.Line) {
       parentLineOrigin = parent.getCenterPoint();
-      if (!isFirst) {
+      if (!isPrimaryRelationship) {
         parentLineOrigin = parentLineOrigin.add(
           new fabric.Point(
             ((parent.x2 as number) - (parent.x1 as number)) / 2 - nodeRadius,
@@ -319,50 +321,26 @@ export default class FamilyTree {
       ],
       {
         ...lineStyles,
-        strokeDashArray: parent instanceof fabric.Line ? [] : [5, 5],
+        strokeDashArray:
+          parent instanceof fabric.Line && isPrimaryRelationship ? [] : [5, 5],
       }
     );
     return line;
   };
 
-  // private _drawChildLine = (child: Node, parentLine: fabric.Line) => {
-  //   const childObject = child._object as fabric.Group;
-  //   const childCenter = childObject.getCenterPoint();
-  //   const strokeWidth = parentLine.strokeWidth ? parentLine.strokeWidth : 0;
-  //   const horizontalLine = new fabric.Line(
-  //     [
-  //       (parentLine.x2 as number) +
-  //         ((parentLine.x2 as number) > childCenter.x ? strokeWidth : 0),
-  //       parentLine.y2 as number,
-  //       childCenter.x,
-  //       parentLine.y2 as number,
-  //     ],
-  //     lineStyles
-  //   );
-  //   const verticalLine = new fabric.Line(
-  //     [
-  //       horizontalLine.x2 as number,
-  //       horizontalLine.y2 as number,
-  //       childCenter.x,
-  //       childCenter.y - nodeRadius - fontSize,
-  //     ],
-  //     lineStyles
-  //   );
-  //   child._childLine = new fabric.Group([horizontalLine, verticalLine], {
-  //     selectable: false,
-  //   });
-  //   this.canvas.add(child._childLine);
-  // };
-
-  private _drawChildLine = (child: Node, parentLine: fabric.Line) => {
+  private _drawChildLine = (
+    child: Node,
+    parentLine: fabric.Line,
+    isPrimaryRelationship: boolean = true
+  ) => {
     const childObject = child._object as fabric.Group;
     const childCenter = childObject.getCenterPoint();
     const strokeWidth = parentLine.strokeWidth ? parentLine.strokeWidth : 0;
 
-    // Lấy kiểu đường từ parentLine
+    // Sử dụng kiểu đường dựa trên mối quan hệ chính/phụ
     const lineStyle = {
       ...lineStyles,
-      strokeDashArray: parentLine.strokeDashArray, // Kế thừa kiểu nét đứt/liền từ parentLine
+      strokeDashArray: isPrimaryRelationship ? [] : [5, 5],
     };
 
     const horizontalLine = new fabric.Line(
@@ -373,7 +351,7 @@ export default class FamilyTree {
         childCenter.x,
         parentLine.y2 as number,
       ],
-      lineStyle // Sử dụng kiểu đường đã kế thừa
+      lineStyle
     );
 
     const verticalLine = new fabric.Line(
@@ -383,7 +361,7 @@ export default class FamilyTree {
         childCenter.x,
         childCenter.y - nodeRadius - fontSize,
       ],
-      lineStyle // Sử dụng kiểu đường đã kế thừa
+      lineStyle
     );
 
     child._childLine = new fabric.Group([horizontalLine, verticalLine], {
@@ -391,6 +369,7 @@ export default class FamilyTree {
     });
     this.canvas.add(child._childLine);
   };
+
   private _drawNode = async (node: Node) => {
     const canvasCenter = this.canvas.getCenter();
     // Create node
@@ -420,6 +399,11 @@ export default class FamilyTree {
           return 0;
         }
       });
+
+      // Đánh dấu mối quan hệ đầu tiên là chính
+      if (relationships.length > 0 && relationships[0].partner) {
+        relationships[0].isPrimaryRelationship = true;
+      }
 
       for (const relationship of node.relationships) {
         if (relationship.partner) {
@@ -454,10 +438,12 @@ export default class FamilyTree {
     }
     node.relationships &&
       generations[node.generation as number].push(
-        ...node.relationships.map(
-          (relationship: Relation) =>
-            relationship.partner?._object as fabric.Group
-        )
+        ...node.relationships
+          .map(
+            (relationship: Relation) =>
+              relationship.partner?._object as fabric.Group
+          )
+          .filter(Boolean) // Lọc bỏ các giá trị undefined
       );
     node.relationships &&
       node.relationships.forEach((relationship: Relation) => {
@@ -474,11 +460,18 @@ export default class FamilyTree {
     const canvasCenter = this.canvas.getCenter();
 
     generations.forEach((generation: fabric.Group[]) => {
+      // Loại bỏ các phần tử undefined từ mảng
+      const filteredGeneration = generation.filter((node) => node);
+
+      if (filteredGeneration.length === 0) return;
+
       const generationWidth =
-        generation.length * generation[0].getBoundingRect().width +
-        (generation.length - 1) * minimumDistanceBetweenNodes;
+        filteredGeneration.length *
+          filteredGeneration[0].getBoundingRect().width +
+        (filteredGeneration.length - 1) * minimumDistanceBetweenNodes;
       let left = canvasCenter.left - generationWidth / 2;
-      generation.forEach((node: fabric.Group | undefined) => {
+
+      filteredGeneration.forEach((node: fabric.Group) => {
         node && node.set({ left });
         left +=
           (node ? node.getBoundingRect().width : 0) +
@@ -490,12 +483,21 @@ export default class FamilyTree {
   private _drawPartnerRelations = (node: Node) => {
     const relationships = node.relationships;
     if (relationships && relationships.length > 0) {
-      for (const relationship of relationships) {
+      // Đánh dấu mối quan hệ đầu tiên là chính
+      if (relationships.length > 0 && relationships[0].partner) {
+        relationships[0].isPrimaryRelationship = true;
+      }
+
+      for (let i = 0; i < relationships.length; i++) {
+        const relationship = relationships[i];
+        const isPrimaryRelationship = i === 0; // Chỉ quan hệ đầu tiên là chính
+
         if (relationship.partner) {
           relationship._relation = this._drawPartnerLine(
             node._object as fabric.Group,
             relationship.partner._object as fabric.Group,
-            relationship.isMarried as boolean
+            relationship.isMarried as boolean,
+            isPrimaryRelationship
           );
           this.canvas.add(relationship._relation);
         }
@@ -511,20 +513,23 @@ export default class FamilyTree {
   private _drawChildRelations = (node: Node) => {
     const relationships = node.relationships;
     if (relationships && relationships.length > 0) {
-      for (const relationship of relationships) {
+      for (let i = 0; i < relationships.length; i++) {
+        const relationship = relationships[i];
+        const isPrimaryRelationship = i === 0; // Chỉ quan hệ đầu tiên là chính
+
         if (relationship.children && relationship.children.length > 0) {
           relationship._parentLine = this._drawParentLine(
             relationship._relation ? relationship._relation : node,
-            relationship.partner
-              ? relationships.indexOf(relationship) === 0
-              : undefined
+            isPrimaryRelationship
           );
           this.canvas.add(relationship._parentLine);
+
           for (const child of relationship.children) {
             this._drawChildRelations(child);
             this._drawChildLine(
               child as Node,
-              relationship._parentLine as fabric.Line
+              relationship._parentLine as fabric.Line,
+              isPrimaryRelationship
             );
           }
         }
