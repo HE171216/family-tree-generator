@@ -1,5 +1,5 @@
-import { fabric } from 'fabric';
-import imgUrl from './assets/images/profile_img.png';
+import { fabric } from "fabric";
+import imgUrl from "./assets/images/profile_img.png";
 
 const fontSize = 18;
 const minimumDistanceBetweenNodes = 150;
@@ -52,7 +52,7 @@ interface Options {
 }
 
 const lineStyles = {
-  stroke: 'black',
+  stroke: "black",
   strokeWidth: 3,
   selectable: false,
   evented: false,
@@ -86,7 +86,7 @@ export default class FamilyTree {
     return new fabric.Canvas(options.id, {
       width: width,
       height: height,
-      hoverCursor: 'pointer',
+      hoverCursor: "pointer",
       selection: false,
       allowTouchScrolling: true,
       enableRetinaScaling: false,
@@ -126,7 +126,7 @@ export default class FamilyTree {
           evt.touches[1].clientY
         );
         let midPoint = point1.midPointFrom(point2);
-        if (opt.self.state == 'start') {
+        if (opt.self.state == "start") {
           this.zoomStartScale = this.getZoom();
         }
         let delta = this.zoomStartScale * opt.self.scale;
@@ -144,21 +144,21 @@ export default class FamilyTree {
       this.requestRenderAll();
     }
 
-    this.canvas.on('mouse:wheel', mouseZoom);
-    this.canvas.on('touch:gesture', touchZoom);
-    this.canvas.on('touch:longpress', resetCanvas);
-    this.canvas.on('mouse:dblclick', resetCanvas);
+    this.canvas.on("mouse:wheel", mouseZoom);
+    this.canvas.on("touch:gesture", touchZoom);
+    this.canvas.on("touch:longpress", resetCanvas);
+    this.canvas.on("mouse:dblclick", resetCanvas);
 
     // Setup pan by dragging on mouse press and hold
-    this.canvas.on('mouse:down', function (this: Canvas, opt) {
+    this.canvas.on("mouse:down", function (this: Canvas, opt) {
       if (opt.target) {
         return;
       }
       var evt = opt.e as MouseEvent | TouchEvent;
       let isTouch =
-        evt.type === 'touchstart' && (evt as TouchEvent).touches.length === 1;
+        evt.type === "touchstart" && (evt as TouchEvent).touches.length === 1;
       this.isDragging = true;
-      this.setCursor('grabbing');
+      this.setCursor("grabbing");
       this.lastPosX = isTouch
         ? (evt as TouchEvent).touches[0].clientX
         : (evt as MouseEvent).clientX;
@@ -166,9 +166,9 @@ export default class FamilyTree {
         ? (evt as TouchEvent).touches[0].clientY
         : (evt as MouseEvent).clientY;
     });
-    this.canvas.on('mouse:move', function (this: Canvas, opt) {
+    this.canvas.on("mouse:move", function (this: Canvas, opt) {
       if (this.isDragging) {
-        let isTouch = opt.e.type === 'touchmove';
+        let isTouch = opt.e.type === "touchmove";
         var evt = opt.e as MouseEvent | TouchEvent;
         let clientX = isTouch
           ? (evt as TouchEvent).touches[0].clientX
@@ -199,7 +199,7 @@ export default class FamilyTree {
         this.lastPosY = clientY;
       }
     });
-    this.canvas.on('mouse:up', function (this: Canvas) {
+    this.canvas.on("mouse:up", function (this: Canvas) {
       // on mouse up we want to recalculate new interaction
       // for all objects, so we call setViewportTransform
       this.setViewportTransform(this.viewportTransform as number[]);
@@ -216,16 +216,16 @@ export default class FamilyTree {
         imageUrl,
         function (img: fabric.Image) {
           img.set({
-            originX: 'center',
-            originY: 'center',
+            originX: "center",
+            originY: "center",
           });
           if (imageObject) {
             resolve(imageObject);
           } else {
-            reject('image src not set');
+            reject("image src not set");
           }
         },
-        { crossOrigin: 'anonymous' }
+        { crossOrigin: "anonymous" }
       );
     });
   };
@@ -234,7 +234,7 @@ export default class FamilyTree {
     imageUrl = imageUrl || (imgUrl as string);
     let imageObject = new fabric.Image(imageUrl, {
       lockScalingFlip: true,
-      crossOrigin: 'Anonymous',
+      crossOrigin: "Anonymous",
     });
     imageObject = await this._setImageSrc(imageObject, imageUrl);
     imageObject.scale((nodeRadius * 2) / (imageObject.width as number));
@@ -242,8 +242,8 @@ export default class FamilyTree {
     // Clip image to circle
     const clipPath = new fabric.Circle({
       radius: nodeRadius,
-      originX: 'center',
-      originY: 'center',
+      originX: "center",
+      originY: "center",
       // Image scaling is applied to the clip path, so we need to invert it
       scaleX: 1 / (imageObject.scaleX as number),
       scaleY: 1 / (imageObject.scaleY as number),
@@ -255,15 +255,15 @@ export default class FamilyTree {
 
     const textObject = new fabric.Text(text, {
       fontSize: fontSize,
-      originX: 'center',
-      originY: 'center',
-      fontWeight: 'bold',
+      originX: "center",
+      originY: "center",
+      fontWeight: "bold",
       top: imageObject.getScaledHeight() / 2 + fontSize,
     });
 
     const group = new NodeGroup([imageObject, textObject], {
-      originX: 'center',
-      originY: 'center',
+      originX: "center",
+      originY: "center",
       selectable: false,
       isNode: true,
     });
@@ -325,10 +325,46 @@ export default class FamilyTree {
     return line;
   };
 
+  // private _drawChildLine = (child: Node, parentLine: fabric.Line) => {
+  //   const childObject = child._object as fabric.Group;
+  //   const childCenter = childObject.getCenterPoint();
+  //   const strokeWidth = parentLine.strokeWidth ? parentLine.strokeWidth : 0;
+  //   const horizontalLine = new fabric.Line(
+  //     [
+  //       (parentLine.x2 as number) +
+  //         ((parentLine.x2 as number) > childCenter.x ? strokeWidth : 0),
+  //       parentLine.y2 as number,
+  //       childCenter.x,
+  //       parentLine.y2 as number,
+  //     ],
+  //     lineStyles
+  //   );
+  //   const verticalLine = new fabric.Line(
+  //     [
+  //       horizontalLine.x2 as number,
+  //       horizontalLine.y2 as number,
+  //       childCenter.x,
+  //       childCenter.y - nodeRadius - fontSize,
+  //     ],
+  //     lineStyles
+  //   );
+  //   child._childLine = new fabric.Group([horizontalLine, verticalLine], {
+  //     selectable: false,
+  //   });
+  //   this.canvas.add(child._childLine);
+  // };
+
   private _drawChildLine = (child: Node, parentLine: fabric.Line) => {
     const childObject = child._object as fabric.Group;
     const childCenter = childObject.getCenterPoint();
     const strokeWidth = parentLine.strokeWidth ? parentLine.strokeWidth : 0;
+
+    // Lấy kiểu đường từ parentLine
+    const lineStyle = {
+      ...lineStyles,
+      strokeDashArray: parentLine.strokeDashArray, // Kế thừa kiểu nét đứt/liền từ parentLine
+    };
+
     const horizontalLine = new fabric.Line(
       [
         (parentLine.x2 as number) +
@@ -337,8 +373,9 @@ export default class FamilyTree {
         childCenter.x,
         parentLine.y2 as number,
       ],
-      lineStyles
+      lineStyle // Sử dụng kiểu đường đã kế thừa
     );
+
     const verticalLine = new fabric.Line(
       [
         horizontalLine.x2 as number,
@@ -346,19 +383,19 @@ export default class FamilyTree {
         childCenter.x,
         childCenter.y - nodeRadius - fontSize,
       ],
-      lineStyles
+      lineStyle // Sử dụng kiểu đường đã kế thừa
     );
+
     child._childLine = new fabric.Group([horizontalLine, verticalLine], {
       selectable: false,
     });
     this.canvas.add(child._childLine);
   };
-
   private _drawNode = async (node: Node) => {
     const canvasCenter = this.canvas.getCenter();
     // Create node
     const nodeObject = await this._createNode(node.name, node.image);
-    nodeObject.on('mousedown', () => {
+    nodeObject.on("mousedown", () => {
       node.onClick && node.onClick(node);
     });
     node._object = nodeObject;
@@ -390,7 +427,7 @@ export default class FamilyTree {
             relationship.partner.name,
             relationship.partner.image
           );
-          parnterNode.on('mousedown', () => {
+          parnterNode.on("mousedown", () => {
             relationship.partner?.onClick &&
               relationship.partner.onClick(relationship.partner);
           });

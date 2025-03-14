@@ -61,16 +61,6 @@ const root = {
                   name: "Test26",
                   generation: 2,
                 },
-                {
-                  id: 30,
-                  name: "Test30",
-                  generation: 2,
-                },
-                {
-                  id: 31,
-                  name: "Test31",
-                  generation: 2,
-                },
               ],
             },
             {
