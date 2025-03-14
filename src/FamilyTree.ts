@@ -6,6 +6,10 @@ const minimumDistanceBetweenNodes = 200; // Tăng lên từ 150 để các node 
 const verticalDistanceBetweenNodes = 200;
 const nodeRadius = 64;
 
+// Highlight colors
+const highlightColor = "#3498db"; // Màu xanh dương khi highlight
+const defaultStrokeColor = "black"; // Màu mặc định của đường nối
+
 export interface Relation {
   partner: Node | undefined;
   isMarried: boolean | undefined;
@@ -24,6 +28,8 @@ export interface Node {
   onClick?: (node: Node) => void;
   _object?: fabric.Group;
   _childLine: fabric.Group;
+  parent?: Node; // Thêm tham chiếu đến node cha
+  parentRelation?: Relation; // Thêm tham chiếu đến mối quan hệ cha mẹ
 }
 
 interface Canvas extends fabric.Canvas {
@@ -35,13 +41,17 @@ interface Canvas extends fabric.Canvas {
 
 interface NodeGroupOptions extends fabric.IGroupOptions {
   isNode: boolean;
+  nodeData?: Node; // Lưu trữ dữ liệu node
 }
 
 class NodeGroup extends fabric.Group {
   declare isNode: boolean;
+  declare nodeData?: Node;
+
   constructor(objects: fabric.Object[], options: NodeGroupOptions) {
     super(objects, options);
     this.isNode = options.isNode;
+    this.nodeData = options.nodeData;
   }
 }
 
@@ -53,7 +63,7 @@ interface Options {
 }
 
 const lineStyles = {
-  stroke: "black",
+  stroke: defaultStrokeColor,
   strokeWidth: 3,
   selectable: false,
   evented: false,
@@ -62,6 +72,8 @@ const lineStyles = {
 export default class FamilyTree {
   private declare root: Node;
   declare canvas: fabric.Canvas;
+  private highlightedNodes: fabric.Object[] = []; // Lưu trữ các node đang được highlight
+  private highlightedLines: fabric.Object[] = []; // Lưu trữ các đường nối đang được highlight
 
   constructor(root: Node, options: Options) {
     this.root = root;
@@ -231,7 +243,11 @@ export default class FamilyTree {
     });
   };
 
-  private _createNode = async (text: string, imageUrl: string | undefined) => {
+  private _createNode = async (
+    text: string,
+    imageUrl: string | undefined,
+    node: Node
+  ) => {
     imageUrl = imageUrl || (imgUrl as string);
     let imageObject = new fabric.Image(imageUrl, {
       lockScalingFlip: true,
@@ -267,7 +283,9 @@ export default class FamilyTree {
       originY: "center",
       selectable: false,
       isNode: true,
+      nodeData: node, // Lưu trữ tham chiếu đến node
     });
+
     return group;
   };
 
@@ -370,13 +388,28 @@ export default class FamilyTree {
     this.canvas.add(child._childLine);
   };
 
-  private _drawNode = async (node: Node) => {
+  private _drawNode = async (
+    node: Node,
+    parentNode?: Node,
+    parentRelation?: Relation
+  ) => {
     const canvasCenter = this.canvas.getCenter();
+
+    // Lưu trữ tham chiếu đến node cha và mối quan hệ cha mẹ
+    if (parentNode) {
+      node.parent = parentNode;
+      node.parentRelation = parentRelation;
+    }
+
     // Create node
-    const nodeObject = await this._createNode(node.name, node.image);
+    const nodeObject = await this._createNode(node.name, node.image, node);
+
+    // Set up highlighting when node is clicked
     nodeObject.on("mousedown", () => {
+      this._handleNodeClick(node);
       node.onClick && node.onClick(node);
     });
+
     node._object = nodeObject;
     const relationships = node.relationships;
 
@@ -407,23 +440,36 @@ export default class FamilyTree {
 
       for (const relationship of node.relationships) {
         if (relationship.partner) {
-          const parnterNode = await this._createNode(
+          const partnerNode = await this._createNode(
             relationship.partner.name,
-            relationship.partner.image
+            relationship.partner.image,
+            relationship.partner
           );
-          parnterNode.on("mousedown", () => {
+
+          // Lưu trữ thông tin về partner's partner (tức là node hiện tại)
+          if (!relationship.partner.relationships) {
+            relationship.partner.relationships = [];
+          }
+          // Thêm node hiện tại làm partner của node partner
+          relationship.partner.parent = node;
+          relationship.partner.parentRelation = relationship;
+
+          // Set up highlighting when partner node is clicked
+          partnerNode.on("mousedown", () => {
+            this._handleNodeClick(relationship.partner as Node);
             relationship.partner?.onClick &&
               relationship.partner.onClick(relationship.partner);
           });
-          relationship.partner._object = parnterNode;
-          parnterNode.set({ left, top });
-          this.canvas.add(parnterNode);
+
+          relationship.partner._object = partnerNode;
+          partnerNode.set({ left, top });
+          this.canvas.add(partnerNode);
         }
 
         // Create children
         if (relationship.children && relationship.children.length > 0) {
           for (const child of relationship.children) {
-            await this._drawNode(child);
+            await this._drawNode(child, node, relationship);
           }
         }
       }
@@ -543,6 +589,169 @@ export default class FamilyTree {
         object.bringToFront();
       }
     });
+  };
+
+  // Reset hiện tại highlight để chuẩn bị cho highlight mới
+  private _resetHighlight = () => {
+    // Khôi phục màu sắc cho tất cả các node đã highlight
+    this.highlightedNodes.forEach((node) => {
+      if (node instanceof fabric.Group) {
+        node.set({
+          shadow: undefined,
+        });
+      }
+    });
+
+    // Khôi phục màu sắc cho tất cả các đường nối đã highlight
+    this.highlightedLines.forEach((line) => {
+      if (line instanceof fabric.Line) {
+        line.set({
+          stroke: defaultStrokeColor,
+        });
+      } else if (line instanceof fabric.Group) {
+        (line.getObjects() as fabric.Object[]).forEach((obj) => {
+          if (obj instanceof fabric.Line) {
+            obj.set({
+              stroke: defaultStrokeColor,
+            });
+          }
+        });
+      }
+    });
+
+    this.highlightedNodes = [];
+    this.highlightedLines = [];
+    this.canvas.requestRenderAll();
+  };
+
+  // Highlight một node cụ thể
+  private _highlightNode = (node: Node) => {
+    if (node._object) {
+      node._object.set({
+        shadow: new fabric.Shadow({
+          color: highlightColor,
+          blur: 10,
+          offsetX: 0,
+          offsetY: 0,
+        }),
+      });
+      this.highlightedNodes.push(node._object);
+    }
+  };
+
+  // Highlight một đường nối
+  private _highlightLine = (line: fabric.Line | fabric.Group) => {
+    if (line instanceof fabric.Line) {
+      line.set({
+        stroke: highlightColor,
+      });
+      this.highlightedLines.push(line);
+    } else if (line instanceof fabric.Group) {
+      (line.getObjects() as fabric.Object[]).forEach((obj) => {
+        if (obj instanceof fabric.Line) {
+          obj.set({
+            stroke: highlightColor,
+          });
+        }
+      });
+      this.highlightedLines.push(line);
+    }
+  };
+
+  // Xử lý khi node được click
+  private _handleNodeClick = (clickedNode: Node) => {
+    this._resetHighlight();
+
+    // Nếu là node cha (không có cha mẹ, hoặc là node gốc)
+    if (!clickedNode.parent) {
+      // Highlight node cha
+      this._highlightNode(clickedNode);
+
+      // Highlight tất cả node con và đường nối với chúng
+      clickedNode.relationships.forEach((relation) => {
+        if (relation.children && relation.children.length > 0) {
+          relation.children.forEach((child) => {
+            this._highlightNode(child);
+
+            // Highlight đường nối với mỗi con
+            if (child._childLine) {
+              this._highlightLine(child._childLine);
+            }
+          });
+
+          // Highlight đường nối từ cha đến các con
+          if (relation._parentLine) {
+            this._highlightLine(relation._parentLine);
+          }
+        }
+      });
+    }
+    // Nếu là node mẹ (có partner, không có cha mẹ riêng)
+    else if (
+      clickedNode.parent &&
+      !clickedNode.parentRelation?.children?.includes(clickedNode)
+    ) {
+      // Highlight node mẹ
+      this._highlightNode(clickedNode);
+
+      // Highlight node cha
+      this._highlightNode(clickedNode.parent);
+
+      // Highlight đường nối giữa cha mẹ
+      if (clickedNode.parentRelation?._relation) {
+        this._highlightLine(clickedNode.parentRelation._relation);
+      }
+
+      // Highlight tất cả node con và đường nối với chúng
+      const relation = clickedNode.parentRelation;
+      if (relation && relation.children && relation.children.length > 0) {
+        relation.children.forEach((child) => {
+          this._highlightNode(child);
+
+          // Highlight đường nối với mỗi con
+          if (child._childLine) {
+            this._highlightLine(child._childLine);
+          }
+        });
+
+        // Highlight đường nối từ cha mẹ đến các con
+        if (relation._parentLine) {
+          this._highlightLine(relation._parentLine);
+        }
+      }
+    }
+    // Nếu là node con
+    else {
+      // Highlight node con
+      this._highlightNode(clickedNode);
+
+      // Highlight node cha
+      if (clickedNode.parent) {
+        this._highlightNode(clickedNode.parent);
+
+        // Highlight node mẹ nếu có
+        if (clickedNode.parentRelation?.partner) {
+          this._highlightNode(clickedNode.parentRelation.partner);
+
+          // Highlight đường nối giữa cha mẹ
+          if (clickedNode.parentRelation._relation) {
+            this._highlightLine(clickedNode.parentRelation._relation);
+          }
+        }
+
+        // Highlight đường nối với cha mẹ
+        if (clickedNode._childLine) {
+          this._highlightLine(clickedNode._childLine);
+        }
+
+        // Highlight đường dọc từ cha mẹ đến con
+        if (clickedNode.parentRelation?._parentLine) {
+          this._highlightLine(clickedNode.parentRelation._parentLine);
+        }
+      }
+    }
+
+    this.canvas.requestRenderAll();
   };
 
   drawTree = async () => {
