@@ -7,7 +7,7 @@ const verticalDistanceBetweenNodes = 200;
 const nodeRadius = 64;
 
 // Highlight colors
-const highlightColor = "#3498db"; // Màu xanh dương khi highlight
+const highlightColor = "#FF5722"; // Màu xanh dương khi highlight
 const defaultStrokeColor = "black"; // Màu mặc định của đường nối
 
 export interface Relation {
