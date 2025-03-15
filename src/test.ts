@@ -42,16 +42,6 @@ const root = {
                   name: "Test29",
                   generation: 2,
                 },
-                {
-                  id: 300,
-                  name: "300",
-                  generation: 2,
-                },
-                {
-                  id: 301,
-                  name: "301",
-                  generation: 2,
-                },
               ],
             },
             {

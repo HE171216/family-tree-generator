@@ -48,7 +48,7 @@ export const createNode = async (
     height: cardHeight,
     fill: "#FFFFFF",
     stroke: node.gender === "female" ? "#FF9EAA" : "#A0D2EB",
-    strokeWidth: 2,
+    strokeWidth: 3,
 
     rx: 8, // Rounded corners
     ry: 8, // Rounded corners
