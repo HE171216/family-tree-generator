@@ -26,20 +26,6 @@ const root = {
           generation: 1,
           relationships: [
             {
-              children: [
-                {
-                  id: 100,
-                  name: "Test100",
-                  generation: 2,
-                },
-                {
-                  id: 101,
-                  name: "Test101",
-                  generation: 2,
-                },
-              ],
-            },
-            {
               partner: {
                 id: 4,
                 name: "Test4",
@@ -54,6 +40,16 @@ const root = {
                 {
                   id: 29,
                   name: "Test29",
+                  generation: 2,
+                },
+                {
+                  id: 300,
+                  name: "300",
+                  generation: 2,
+                },
+                {
+                  id: 301,
+                  name: "301",
                   generation: 2,
                 },
               ],
@@ -82,6 +78,20 @@ const root = {
                 {
                   id: 28,
                   name: "Test28",
+                  generation: 2,
+                },
+              ],
+            },
+            {
+              children: [
+                {
+                  id: 100,
+                  name: "Test100",
+                  generation: 2,
+                },
+                {
+                  id: 101,
+                  name: "Test101",
                   generation: 2,
                 },
               ],

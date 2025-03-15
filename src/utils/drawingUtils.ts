@@ -39,16 +39,48 @@ export const createNode = async (
   node: Node
 ) => {
   imageUrl = imageUrl || defaultImageUrl;
+
+  // Create card background
+  const cardWidth = nodeRadius * 2;
+  const cardHeight = nodeRadius * 2 + 40; // Extra height for the name
+  const cardBackground = new fabric.Rect({
+    width: cardWidth,
+    height: cardHeight,
+    fill: "#FFFFFF",
+    stroke: node.gender === "female" ? "#FF9EAA" : "#A0D2EB",
+    strokeWidth: 2,
+
+    rx: 8, // Rounded corners
+    ry: 8, // Rounded corners
+    originX: "center",
+    originY: "center",
+    shadow: new fabric.Shadow({
+      color: "rgba(0,0,0,0.3)",
+      blur: 5,
+      offsetX: 0,
+      offsetY: 2,
+    }),
+  });
+
+  // Create image
   let imageObject = new fabric.Image(imageUrl, {
     lockScalingFlip: true,
     crossOrigin: "Anonymous",
   });
+
   imageObject = await setImageSrc(imageObject, imageUrl);
-  imageObject.scale((nodeRadius * 2) / (imageObject.width as number));
+  imageObject.scale((nodeRadius * 1.8) / (imageObject.width as number));
+
+  // Position the image near the top of the card
+  imageObject.set({
+    top: -cardHeight / 2 + nodeRadius,
+    originX: "center",
+    originY: "center",
+  });
 
   // Clip image to circle
   const clipPath = new fabric.Circle({
-    radius: nodeRadius,
+    radius: nodeRadius * 0.9,
     originX: "center",
     originY: "center",
     // Image scaling is applied to the clip path, so we need to invert it
@@ -60,15 +92,20 @@ export const createNode = async (
     clipPath: clipPath,
   });
 
+  // Create text
   const textObject = new fabric.Text(text, {
     fontSize: fontSize,
     originX: "center",
     originY: "center",
     fontWeight: "bold",
-    top: imageObject.getScaledHeight() / 2 + fontSize,
+    top: cardHeight / 2 - 20, // Position near bottom of card
+    fill: "#333333",
+    textAlign: "center",
+    width: cardWidth - 10,
   });
 
-  const group = new NodeGroup([imageObject, textObject], {
+  // Create the node group
+  const group = new NodeGroup([cardBackground, imageObject, textObject], {
     originX: "center",
     originY: "center",
     selectable: false,
@@ -145,7 +182,7 @@ export const drawChildLine = (
   const childCenter = childObject.getCenterPoint();
   const strokeWidth = parentLine.strokeWidth ? parentLine.strokeWidth : 0;
 
-  // Sử dụng kiểu đường dựa trên mối quan hệ chính/phụ
+  // Use line style based on relationship
   const lineStyle = {
     ...lineStyles,
     strokeDashArray: isPrimaryRelationship ? [] : [5, 5],
@@ -167,7 +204,7 @@ export const drawChildLine = (
       horizontalLine.x2 as number,
       horizontalLine.y2 as number,
       childCenter.x,
-      childCenter.y - nodeRadius - fontSize,
+      childCenter.y - (nodeRadius * 2 + 40) / 2, // Adjusted to account for card height
     ],
     lineStyle
   );
@@ -207,7 +244,7 @@ export const positionNodes = (canvas: fabric.Canvas, root: Node) => {
   const canvasCenter = canvas.getCenter();
 
   generations.forEach((generation: fabric.Group[]) => {
-    // Loại bỏ các phần tử undefined từ mảng
+    // Remove undefined elements
     const filteredGeneration = generation.filter((node) => node);
 
     if (filteredGeneration.length === 0) return;

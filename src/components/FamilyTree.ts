@@ -8,7 +8,7 @@ import {
   drawParentLine,
   drawChildLine,
   positionNodes,
-  bringNodesToFront, // This is now used and not redundant
+  bringNodesToFront,
 } from "../utils/drawingUtils";
 import { HighlightManager } from "../utils/highlightUtils";
 import {
@@ -33,7 +33,6 @@ export default class FamilyTree {
     parentNode?: Node,
     parentRelation?: Relation
   ) => {
-    // Method body unchanged
     const canvasCenter = this.canvas.getCenter();
 
     if (parentNode) {
@@ -59,8 +58,16 @@ export default class FamilyTree {
     this.canvas.add(nodeObject);
 
     if (relationships && relationships.length > 0) {
+      // Modified sorting logic - prioritize relationships without partners (just children)
       relationships.sort((a, b) => {
-        if (a.isMarried && !b.isMarried) {
+        // Prioritize relationships with no partner (just children)
+        if (!a.partner && b.partner) {
+          return -1; // a comes first (no partner)
+        } else if (a.partner && !b.partner) {
+          return 1; // b comes first (no partner)
+        }
+        // Then sort by marriage status for relationships with partners
+        else if (a.isMarried && !b.isMarried) {
           return -1;
         } else if (!a.isMarried && b.isMarried) {
           return 1;
@@ -69,9 +76,23 @@ export default class FamilyTree {
         }
       });
 
-      if (relationships.length > 0 && relationships[0].partner) {
-        relationships[0].isPrimaryRelationship = true;
-      }
+      // Mark primary relationships - both for relationships with only children
+      // and for the first relationship with a partner
+      let foundPartnerRelationship = false;
+
+      relationships.forEach((relationship) => {
+        // Set all relationships with only children as primary
+        if (!relationship.partner && relationship.children?.length > 0) {
+          relationship.isPrimaryRelationship = true;
+        }
+        // Set the first relationship with a partner as primary
+        else if (relationship.partner && !foundPartnerRelationship) {
+          relationship.isPrimaryRelationship = true;
+          foundPartnerRelationship = true;
+        } else {
+          relationship.isPrimaryRelationship = false;
+        }
+      });
 
       for (const relationship of node.relationships) {
         if (relationship.partner) {
@@ -108,23 +129,17 @@ export default class FamilyTree {
   };
 
   private _drawPartnerRelations = (node: Node) => {
-    // Method body unchanged
     const relationships = node.relationships;
     if (relationships && relationships.length > 0) {
-      if (relationships.length > 0 && relationships[0].partner) {
-        relationships[0].isPrimaryRelationship = true;
-      }
-
       for (let i = 0; i < relationships.length; i++) {
         const relationship = relationships[i];
-        const isPrimaryRelationship = i === 0;
 
         if (relationship.partner) {
           relationship._relation = drawPartnerLine(
             node._object as fabric.Group,
             relationship.partner._object as fabric.Group,
             relationship.isMarried as boolean,
-            isPrimaryRelationship
+            relationship.isPrimaryRelationship === true
           );
           this.canvas.add(relationship._relation);
         }
@@ -138,14 +153,17 @@ export default class FamilyTree {
   };
 
   private _drawChildRelations = (node: Node) => {
-    // Method body unchanged
     const relationships = node.relationships;
     if (relationships && relationships.length > 0) {
       for (let i = 0; i < relationships.length; i++) {
         const relationship = relationships[i];
-        const isPrimaryRelationship = i === 0;
+        // Use the isPrimaryRelationship flag directly from the relationship
+        const isPrimaryRelationship =
+          relationship.isPrimaryRelationship === true;
 
         if (relationship.children && relationship.children.length > 0) {
+          // For relationships without a partner, use the node itself
+          // For relationships with a partner, use the relationship line
           relationship._parentLine = drawParentLine(
             relationship._relation ? relationship._relation : node,
             isPrimaryRelationship

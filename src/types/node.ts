@@ -4,6 +4,7 @@ export interface Node {
   id: string | number;
   name: string;
   image?: string;
+  gender?: "female" | "male";
   generation?: number;
   relationships: Relation[];
   onClick?: (node: Node) => void;
