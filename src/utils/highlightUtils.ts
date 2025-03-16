@@ -5,14 +5,50 @@ import { highlightColor, defaultStrokeColor } from "../constants/styles";
 export class HighlightManager {
   private highlightedNodes: fabric.Object[] = [];
   private highlightedLines: fabric.Object[] = [];
+  private clickedNode: Node | null = null;
   private canvas: fabric.Canvas;
 
   constructor(canvas: fabric.Canvas) {
     this.canvas = canvas;
+    this.setupHoverEvents();
+  }
+
+  setupHoverEvents() {
+    // Add hover event handlers
+    this.canvas.on("mouse:over", (options) => {
+      const hoveredObject = options.target;
+      if (hoveredObject && (hoveredObject as any).isNode) {
+        const nodeData = (hoveredObject as any).nodeData;
+        if (nodeData) {
+          this.handleNodeHover(nodeData);
+        }
+      }
+    });
+
+    this.canvas.on("mouse:out", () => {
+      // Only reset highlights if there's no clicked node
+      if (!this.clickedNode) {
+        this.resetHighlight();
+      }
+    });
+
+    this.canvas.on("mouse:down", (options) => {
+      const clickedObject = options.target;
+      if (clickedObject && (clickedObject as any).isNode) {
+        const nodeData = (clickedObject as any).nodeData;
+        if (nodeData) {
+          this.handleNodeClick(nodeData);
+        }
+      } else {
+        // Reset when clicking on empty space
+        this.clickedNode = null;
+        this.resetHighlight();
+      }
+    });
   }
 
   resetHighlight = () => {
-    // Khôi phục màu sắc cho tất cả các node đã highlight
+    // Restore color for all highlighted nodes
     this.highlightedNodes.forEach((node) => {
       if (node instanceof fabric.Group) {
         node.set({
@@ -21,7 +57,7 @@ export class HighlightManager {
       }
     });
 
-    // Khôi phục màu sắc cho tất cả các đường nối đã highlight
+    // Restore color for all highlighted lines
     this.highlightedLines.forEach((line) => {
       if (line instanceof fabric.Line) {
         line.set({
@@ -84,6 +120,7 @@ export class HighlightManager {
 
   highlightNode = (node: Node) => {
     if (node._object) {
+      // Only apply hover highlight (no border effect on image)
       node._object.set({
         shadow: new fabric.Shadow({
           color: highlightColor,
@@ -152,48 +189,156 @@ export class HighlightManager {
     this.canvas.requestRenderAll();
   };
 
+  // Handle node hover - similar to click but doesn't set clickedNode
+  handleNodeHover = (hoveredNode: Node) => {
+    // Skip hover handling if a node is already clicked
+    if (this.clickedNode) return;
+
+    // Apply enhanced ancestry highlighting
+    this.highlightAncestryChain(hoveredNode);
+  };
+
+  // Handle node click - apply box shadow effect and highlight ancestry
   handleNodeClick = (clickedNode: Node) => {
+    // Reset previous highlights
     this.resetHighlight();
 
-    if (!clickedNode.parent) {
-      // Highlight the root node
-      this.highlightNode(clickedNode);
+    // Set as clicked node
+    this.clickedNode = clickedNode;
 
-      clickedNode.relationships.forEach((relation) => {
-        if (relation.children && relation.children.length > 0) {
-          relation.children.forEach((child) => {
-            this.highlightNode(child);
+    // Apply the same ancestry highlighting as hover
+    this.highlightAncestryChain(clickedNode);
 
-            // Highlight the child connection line
-            if (child._childLine) {
-              this.highlightLine(child._childLine);
-            }
-          });
+    // Add special box shadow effect for clicked node
+    if (clickedNode._object) {
+      const objects = clickedNode._object.getObjects();
+      const cardBackground = objects[0]; // Assuming first object is the card background
+      if (cardBackground) {
+        cardBackground.set({
+          shadow: new fabric.Shadow({
+            color: "rgba(0,0,0,0.5)",
+            blur: 15,
+            offsetX: 0,
+            offsetY: 5,
+          }),
+        });
+      }
+    }
 
-          // Highlight vertical parent line
-          if (relation._parentLine) {
-            this.highlightLine(relation._parentLine);
-          }
+    this.canvas.requestRenderAll();
+  };
 
-          // Fix for issue 2: Highlight the horizontal partner line for root node
-          if (relation._relation) {
-            this.highlightLine(relation._relation);
-          }
+  // Method to highlight the entire ancestry chain
+  highlightAncestryChain(node: Node) {
+    this.resetHighlight();
+
+    // Highlight the current node itself
+    this.highlightNode(node);
+
+    // Highlight relationships based on node position
+    if (!node.parent) {
+      // Root node: highlight children and partners
+      this.highlightDirectDescendants(node);
+    } else {
+      // Non-root node: highlight entire ancestry chain and immediate family
+      this.highlightAncestors(node);
+
+      // Also highlight siblings and partner if any
+      if (node.parentRelation) {
+        this.highlightSiblingsAndPartner(node);
+      }
+    }
+
+    this._ensureNodesOnTop();
+    this.canvas.requestRenderAll();
+  }
+
+  // Helper method to highlight ancestors all the way up
+  highlightAncestors(node: Node) {
+    let currentNode = node;
+
+    while (currentNode.parent) {
+      // Highlight parent
+      this.highlightNode(currentNode.parent);
+
+      // Highlight parent's partner if exists
+      if (currentNode.parentRelation?.partner) {
+        this.highlightNode(currentNode.parentRelation.partner);
+
+        // Highlight the relationship line between parents
+        if (currentNode.parentRelation._relation) {
+          this.highlightLine(currentNode.parentRelation._relation);
         }
-      });
-    } else if (
-      clickedNode.parent &&
-      !clickedNode.parentRelation?.children?.includes(clickedNode)
-    ) {
-      this.highlightNode(clickedNode);
-      this.highlightNode(clickedNode.parent);
-
-      if (clickedNode.parentRelation?._relation) {
-        this.highlightLine(clickedNode.parentRelation._relation);
       }
 
-      const relation = clickedNode.parentRelation;
-      if (relation && relation.children && relation.children.length > 0) {
+      // Highlight the connection line to parent
+      if (currentNode._childLine) {
+        this.highlightLine(currentNode._childLine);
+      }
+
+      // Highlight vertical parent line if exists
+      if (currentNode.parentRelation?._parentLine) {
+        this.highlightLine(currentNode.parentRelation._parentLine);
+      }
+
+      // Move up to the next generation
+      currentNode = currentNode.parent;
+    }
+  }
+
+  // Helper method to highlight siblings and partner
+  highlightSiblingsAndPartner(node: Node) {
+    const relation = node.parentRelation;
+
+    if (relation && relation.children && relation.children.length > 0) {
+      // Highlight all siblings
+      relation.children.forEach((child) => {
+        if (child !== node) {
+          // Skip the current node
+          this.highlightNode(child);
+        }
+
+        // Highlight the child connection line
+        if (child._childLine) {
+          this.highlightLine(child._childLine);
+        }
+      });
+    }
+
+    // Highlight node's own partners and children if any
+    node.relationships?.forEach((rel) => {
+      if (rel.partner) {
+        this.highlightNode(rel.partner);
+        if (rel._relation) {
+          this.highlightLine(rel._relation);
+        }
+      }
+
+      if (rel._parentLine) {
+        this.highlightLine(rel._parentLine);
+      }
+
+      rel.children?.forEach((child) => {
+        this.highlightNode(child);
+        if (child._childLine) {
+          this.highlightLine(child._childLine);
+        }
+      });
+    });
+  }
+
+  // Helper method to highlight direct descendants for root node
+  highlightDirectDescendants(node: Node) {
+    node.relationships.forEach((relation) => {
+      if (relation.partner) {
+        this.highlightNode(relation.partner);
+
+        if (relation._relation) {
+          this.highlightLine(relation._relation);
+        }
+      }
+
+      if (relation.children && relation.children.length > 0) {
         relation.children.forEach((child) => {
           this.highlightNode(child);
 
@@ -206,33 +351,6 @@ export class HighlightManager {
           this.highlightLine(relation._parentLine);
         }
       }
-    } else {
-      this.highlightNode(clickedNode);
-
-      if (clickedNode.parent) {
-        this.highlightNode(clickedNode.parent);
-
-        if (clickedNode.parentRelation?.partner) {
-          this.highlightNode(clickedNode.parentRelation.partner);
-
-          if (clickedNode.parentRelation._relation) {
-            this.highlightLine(clickedNode.parentRelation._relation);
-          }
-        }
-
-        if (clickedNode._childLine) {
-          this.highlightLine(clickedNode._childLine);
-        }
-
-        if (clickedNode.parentRelation?._parentLine) {
-          this.highlightLine(clickedNode.parentRelation._parentLine);
-        }
-      }
-    }
-
-    // Apply proper z-ordering for highlighted lines
-    this._ensureNodesOnTop();
-
-    this.canvas.requestRenderAll();
-  };
+    });
+  }
 }

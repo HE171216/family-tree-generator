@@ -28,7 +28,8 @@
     "host": "vite --host"
   },
   "dependencies": {
-    "fabric": "^5.5.1"
+    "fabric": "^5.5.1",
+    "html-to-image": "^1.11.13"
   },
   "devDependencies": {
     "@types/fabric": "^5.3.0",

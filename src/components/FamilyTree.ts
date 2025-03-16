@@ -20,7 +20,6 @@ export default class FamilyTree {
   private declare root: Node;
   declare canvas: fabric.Canvas;
   private highlightManager: HighlightManager;
-
   constructor(root: Node, options: Options) {
     this.root = root;
     this.canvas = createCanvas(options);

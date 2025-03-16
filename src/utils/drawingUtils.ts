@@ -49,7 +49,6 @@ export const createNode = async (
     fill: "#FFFFFF",
     stroke: node.gender === "female" ? "#FF9EAA" : "#A0D2EB",
     strokeWidth: 3,
-
     rx: 8, // Rounded corners
     ry: 8, // Rounded corners
     originX: "center",
@@ -111,6 +110,7 @@ export const createNode = async (
     selectable: false,
     isNode: true,
     nodeData: node,
+    hoverCursor: "pointer",
   });
 
   return group;
